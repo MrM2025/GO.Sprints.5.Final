@@ -1,0 +1,4 @@
+status= "proto3"
+package application
+option go_package = "github.com/MrM2025/rpforcalc/tree/master/calc_go"
+
