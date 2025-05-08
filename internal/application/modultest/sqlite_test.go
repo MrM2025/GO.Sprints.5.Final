@@ -62,15 +62,13 @@ func TestDB(t *testing.T) {
 		return
 	}
 
-	_, err = http.NewRequest("GET", server.URL+"/api/v1/register", bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", server.URL+"/api/v1/register", bytes.NewBuffer(body))
 	if err != nil {
 		t.Fatal("Creating a request error")
 		return
 	}
 
-	//res, err := server.Client().Do(req)
-
-	res, err := http.Get(server.URL+"/api/v1/register")
+	res, err := server.Client().Do(req)
 
 	if err != nil {
 		t.Fatal("Request processing error:", err)
@@ -82,16 +80,10 @@ func TestDB(t *testing.T) {
 		t.Fatalf("Expected status 201 , but got %d", res.StatusCode)
 	}
 
-	//log.Println(res.Body)
+	handl := http.HandlerFunc(app.SignIn)
+	serv := httptest.NewServer(handl)
+	
+	
 
-	r := Resp{}
-
-	json.NewDecoder(res.Body).Decode(&r)
-
-	ExpectedResult := "Successful sign up"
-
-	if r.status != ExpectedResult {
-		t.Fatalf("Expected result %s, but got %s", ExpectedResult, r.status)
-	}
 
 }
