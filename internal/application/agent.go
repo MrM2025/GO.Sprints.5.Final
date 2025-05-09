@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/MrM2025/rpforcalc/tree/master/calc_go/internal/application"
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
 )
 
@@ -107,7 +108,7 @@ func (a *Agent) worker() {
 	}
 }
 
-func calculator(operator string, arg1, arg2 float64) (float64, error) {
+func (a *Agent) Calculator(operator string, arg1, arg2 float64) (float64, error) {
 	var result float64
 
 	switch {

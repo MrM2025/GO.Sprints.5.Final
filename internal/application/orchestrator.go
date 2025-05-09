@@ -1,13 +1,13 @@
-	package application
+package application
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"net/http"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -59,7 +59,7 @@ func ConfigFromEnv() *Config {
 type Orchestrator struct {
 	Config      *Config
 	Db          *sql.DB
-	ctx context.Context
+	ctx         context.Context
 	taskStore   map[string]*Task
 	taskQueue   []*Task
 	mu          sync.Mutex
@@ -70,8 +70,8 @@ type Orchestrator struct {
 func NewOrchestrator(db *sql.DB, ctx context.Context) *Orchestrator {
 	return &Orchestrator{
 		Config:    ConfigFromEnv(),
-		Db: db,
-		ctx: ctx,
+		Db:        db,
+		ctx:       ctx,
 		taskStore: make(map[string]*Task),
 		taskQueue: make([]*Task, 0),
 	}
@@ -79,6 +79,7 @@ func NewOrchestrator(db *sql.DB, ctx context.Context) *Orchestrator {
 
 type OrchReqJSON struct {
 	Expression string `json:"expression"`
+	JWT        string `json:"jwt,omitempty"`
 }
 
 type OrchResJSON struct {
@@ -89,6 +90,7 @@ type OrchResJSON struct {
 type Expression struct {
 	ID     string   `json:"id,omitempty"`
 	Expr   string   `json:"expression,omitempty"`
+	Jwt    string   `json:"jwt,omitempty"`
 	Status string   `json:"status,omitempty"`
 	Result float64  `json:"result,omitempty"`
 	AST    *ASTNode `json:"-"`
@@ -217,6 +219,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Ð
 	expr := &Expression{
 		ID:     exprID,
 		Expr:   request.Expression,
+		Jwt: request.JWT,
 		Status: "pending",
 		AST:    ast,
 	}

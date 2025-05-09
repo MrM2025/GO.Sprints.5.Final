@@ -249,13 +249,13 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 
 	var h HASH
 
-	// TODO: если нет логин сказать, что он неправильный
+	// TODO: если нет логина, сказать, что он неправильный
 	o.Db.QueryRowContext(o.ctx, q, u.Login).Scan(&h.hash)
 
 	er := compare(h.hash, u.Password)
 	if er != nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("Incorrect password"))
+		json.NewEncoder(w).Encode(Rsp{Status:"Incorrect password"})
 		return
 	}
 
