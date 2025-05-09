@@ -10,8 +10,8 @@ import (
 
 const hmacSampleSecret = "really_secret_signature"
 
-func AddJWT(u string) string{
-	now := time.Now()
+func AddJWT(u string) string {
+	now := time.Now() 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"name": u,
 		"nbf":  now.Add(time.Minute).Unix(),

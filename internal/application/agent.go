@@ -56,7 +56,7 @@ func (a *Agent) worker() {
 	for {
 		resp, err := http.Get(a.OrchestratorURL + "/internal/task")
 		if err != nil {
-			log.Printf("Worker %d: error getting task: %v", err)
+			log.Printf("Worker: error getting task: %v", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -98,6 +98,10 @@ func (a *Agent) worker() {
 
 		payloadBytes, _ := json.Marshal(resultPayload)
 		respPost, err := http.Post(a.OrchestratorURL+"/internal/task", "application/json", bytes.NewReader(payloadBytes))
+		if err != nil {
+			fmt.Errorf("%s", err)
+			return
+		}
 		respPost.Body.Close()
 
 	}

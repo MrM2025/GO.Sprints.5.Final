@@ -1,17 +1,20 @@
-package application
+	package application
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"net/http"
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Config struct {
@@ -55,6 +58,8 @@ func ConfigFromEnv() *Config {
 
 type Orchestrator struct {
 	Config      *Config
+	Db          *sql.DB
+	ctx context.Context
 	taskStore   map[string]*Task
 	taskQueue   []*Task
 	mu          sync.Mutex
@@ -62,9 +67,11 @@ type Orchestrator struct {
 	taskCounter int
 }
 
-func NewOrchestrator() *Orchestrator {
+func NewOrchestrator(db *sql.DB, ctx context.Context) *Orchestrator {
 	return &Orchestrator{
 		Config:    ConfigFromEnv(),
+		Db: db,
+		ctx: ctx,
 		taskStore: make(map[string]*Task),
 		taskQueue: make([]*Task, 0),
 	}
@@ -331,6 +338,10 @@ func (o *Orchestrator) RunOrchestrator() {
 	mux.HandleFunc("/api/v1/calculate", o.CalcHandler)
 	mux.HandleFunc("/api/v1/expressions", ExpressionsOutput)
 	mux.HandleFunc("/api/v1/expression/id", ExpressionByID)
+	mux.HandleFunc("/api/v1/register", o.SignUp)
+	mux.HandleFunc("/api/v1/login", o.SignIn)
+	mux.HandleFunc("/api/v1/DTBs", o.DTBs)
+	//mux.HandleFunc("/api/v1/DDB", o.DDB)
 	mux.HandleFunc("/internal/task", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			o.GetTaskHandler(w, r)

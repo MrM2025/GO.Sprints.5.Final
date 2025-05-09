@@ -3,7 +3,6 @@ package application
 import (
 	"bytes"
 	"context"
-
 	//"log"
 	"database/sql"
 	"encoding/json"
@@ -15,15 +14,26 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type Resp struct {
-	status string
+type Reqs struct {
+	Login string `json:"login"`
+	Pas   string `json:"pas"`
 }
 
-func TestDB(t *testing.T) {
+type Resp struct {
+	Status string `json:"status"`
+	Jwt    string `json:"jwt"`
+}
 
+type JSONWebToken struct {
+	jwt string
+}
+
+// CASE 1
+func TestDBC1(t *testing.T) {
+//// Deleting the db tables for a new test
 	ctx := context.TODO()
 
-	db, err := sql.Open("sqlite3", "store.db")
+	db, err := sql.Open("sqlite3", "teststore.db")
 	if err != nil {
 		panic(err)
 	}
@@ -42,16 +52,17 @@ func TestDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
+//// SignUp
+	var (
+		rs Resp
+		j JSONWebToken
+	)
+
 	handler := http.HandlerFunc(app.SignUp)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	type Request struct {
-		Login string `json:"login"`
-		Pas   string `json:"pas"`
-	}
-
-	reqs := Request{
+	reqs := Reqs{
 		Login: "User",
 		Pas:   "123",
 	}
@@ -69,7 +80,6 @@ func TestDB(t *testing.T) {
 	}
 
 	res, err := server.Client().Do(req)
-
 	if err != nil {
 		t.Fatal("Request processing error:", err)
 		return
@@ -80,10 +90,39 @@ func TestDB(t *testing.T) {
 		t.Fatalf("Expected status 201 , but got %d", res.StatusCode)
 	}
 
+//// SignIn
 	handl := http.HandlerFunc(app.SignIn)
 	serv := httptest.NewServer(handl)
-	
-	
+	defer serv.Close()
 
+	req, err = http.NewRequest("POST", serv.URL+"/api/v1/login", bytes.NewBuffer(body))
+	if err != nil {
+		t.Fatal("Creating a request error")
+		return
+	}
+	
+	res, err = serv.Client().Do(req)
+	if err != nil {
+		t.Fatal("Request processing error:", err)
+		return
+	}
+	defer res.Body.Close()
+
+	json.NewDecoder(res.Body).Decode(&rs)
+	
+	qj := `SELECT jwt FROM users WHERE login = ?`
+	db.QueryRowContext(ctx, qj, reqs.Login).Scan(&j.jwt)
+
+	expectedStatus := "Successful sign in"
+
+	if rs.Status != expectedStatus {
+		t.Fatal("Incorrect login or password")
+		return
+	}
+
+	if rs.Jwt != j.jwt {
+		t.Fatal("Incorrect JSON Web Token")
+		return
+	}
 
 }
