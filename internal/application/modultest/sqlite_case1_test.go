@@ -33,7 +33,7 @@ func TestDBC1(t *testing.T) {
 //// Deleting the db tables for a new test
 	ctx := context.TODO()
 
-	db, err := sql.Open("sqlite3", "teststore.db")
+	db, err := sql.Open("sqlite3", "teststore1.db")
 	if err != nil {
 		panic(err)
 	}
@@ -53,11 +53,6 @@ func TestDBC1(t *testing.T) {
 	}
 
 //// SignUp
-	var (
-		rs Resp
-		j JSONWebToken
-	)
-
 	handler := http.HandlerFunc(app.SignUp)
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -91,6 +86,11 @@ func TestDBC1(t *testing.T) {
 	}
 
 //// SignIn
+	var (
+			rs Resp
+			j JSONWebToken
+		)
+
 	handl := http.HandlerFunc(app.SignIn)
 	serv := httptest.NewServer(handl)
 	defer serv.Close()

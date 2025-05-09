@@ -3,9 +3,9 @@ package application
 import (
 	"bytes"
 	"context"
-	//"log"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,8 +15,13 @@ import (
 )
 
 type Request struct {
-	Login string `json:"login"`
-	Pas   string `json:"pas"`
+	Login    string `json:"login"`
+	Password string `json:"password"`
+}
+
+type NRequest struct {
+	Login    string `json:"login"`
+	Password string `json:"password"`
 }
 
 type Rsp struct {
@@ -25,14 +30,15 @@ type Rsp struct {
 }
 
 type JWT struct {
-	jwt string
+	Jwt string
 }
 
 // CASE 2
 func TestDBC2(t *testing.T) {
+	//// Deleting the db tables for a new test
 	ctx := context.TODO()
 
-	db, err := sql.Open("sqlite3", "teststore.db")
+	db, err := sql.Open("sqlite3", "teststore2.db")
 	if err != nil {
 		panic(err)
 	}
@@ -43,23 +49,22 @@ func TestDBC2(t *testing.T) {
 		panic(err)
 	}
 
-	app := application.NewOrchestrator(db, ctx)
-	app.CreateTables()
+	ap := application.NewOrchestrator(db, ctx)
+	ap.CreateTables()
 
-	err = app.UTD(ctx, "User", db)
+	err = ap.UTD(ctx, "User", db)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var incrs Rsp
-
-	handler := http.HandlerFunc(app.SignUp)
+	//// SignUp
+	handler := http.HandlerFunc(ap.SignUp)
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
 	reqs := Request{
-		Login: "User",
-		Pas:   "123",
+		Login:    "User",
+		Password: "123",
 	}
 
 	body, err := json.Marshal(reqs)
@@ -84,34 +89,42 @@ func TestDBC2(t *testing.T) {
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("Expected status 201 , but got %d", res.StatusCode)
 	}
-	handler = http.HandlerFunc(app.SignIn)
-	server = httptest.NewServer(handler)
-	
-	incorreq := Request{
-		Login: "User",
-		Pas:   "sdfghjk",
+
+	//// SignIn
+	var incrs Rsp
+
+	handl := http.HandlerFunc(ap.SignIn)
+	serv := httptest.NewServer(handl)
+	defer serv.Close()
+
+	incorreq := NRequest{
+		Login:    "User",
+		Password: "qwerty",
 	}
 
-	body, err = json.Marshal(incorreq)
+	bdy, err := json.Marshal(incorreq)
 	if err != nil {
 		t.Fatal("Marshalling error")
 		return
 	}
 
-	req, err = http.NewRequest("POST", server.URL+"/api/v1/login", bytes.NewBuffer(body))
+	rq, err := http.NewRequest("POST", serv.URL+"/api/v1/login", bytes.NewBuffer(bdy))
 	if err != nil {
 		t.Fatal("Creating a request error")
 		return
 	}
 
-	resp, err := server.Client().Do(req)
+	resp, err := serv.Client().Do(rq)
 	if err != nil {
 		t.Fatal("Request processing error:", err)
 		return
 	}
+	defer resp.Body.Close()
 
-	json.NewDecoder(resp.Body).Decode(&incrs)
-	
+	err = json.NewDecoder(resp.Body).Decode(&incrs)
+
+	log.Println(err)
+
 	expectedStatus := "Incorrect password"
 
 	if incrs.Status != expectedStatus {
