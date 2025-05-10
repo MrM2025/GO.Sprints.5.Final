@@ -3,9 +3,10 @@ package application
 import (
 	"bytes"
 	"context"
+
+	//"log"
 	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,10 +36,10 @@ type JWT struct {
 
 // CASE 2
 func TestDBC2(t *testing.T) {
-	//// Deleting the db tables for a new test
+//// Deleting the db tables for a new test
 	ctx := context.TODO()
 
-	db, err := sql.Open("sqlite3", "teststore2.db")
+	db, err := sql.Open("sqlite3", "teststore.db")
 	if err != nil {
 		panic(err)
 	}
@@ -57,7 +58,7 @@ func TestDBC2(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//// SignUp
+//// SignUp
 	handler := http.HandlerFunc(ap.SignUp)
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -90,7 +91,7 @@ func TestDBC2(t *testing.T) {
 		t.Fatalf("Expected status 201 , but got %d", res.StatusCode)
 	}
 
-	//// SignIn
+//// SignIn
 	var incrs Rsp
 
 	handl := http.HandlerFunc(ap.SignIn)
@@ -122,8 +123,6 @@ func TestDBC2(t *testing.T) {
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&incrs)
-
-	log.Println(err)
 
 	expectedStatus := "Incorrect password"
 

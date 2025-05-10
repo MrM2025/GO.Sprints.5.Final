@@ -246,7 +246,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Ð
 	o.Tasks(expr)
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"id": exprID})
+	json.NewEncoder(w).Encode(OrchResJSON{ID: exprID})
 
 }
 
@@ -357,8 +357,8 @@ func (o *Orchestrator) RunOrchestrator() {
 		http.ServeFile(w, r, "..\\README.md")
 	})
 	mux.HandleFunc("/api/v1/calculate", o.CalcHandler)
-	mux.HandleFunc("/api/v1/expressions", ExpressionsOutput)
-	mux.HandleFunc("/api/v1/expression/id", ExpressionByID)
+	mux.HandleFunc("/api/v1/expressions", o.ExpressionsOutput)
+	mux.HandleFunc("/api/v1/expression/id", o.ExpressionByID)
 	mux.HandleFunc("/api/v1/register", o.SignUp)
 	mux.HandleFunc("/api/v1/login", o.SignIn)
 	mux.HandleFunc("/api/v1/DTBs", o.DTBs)

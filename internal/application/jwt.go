@@ -14,7 +14,7 @@ func AddJWT(u string) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"name": u,
 		"nbf":  now.Unix(),
-		"exp":  now.Add(1 * time.Minute).Unix(),
+		"exp":  now.Add(5 * time.Minute).Unix(),
 		"iat":  now.Unix(),
 	})
 

@@ -7,6 +7,10 @@ import (
 	"sync"
 )
 
+type SlExprsResp struct {
+	Expressions []*Expression `json:"expression,omitempty"`
+}
+
 type JWTforExpr struct {
 	JWT string `json:"jwt,omitempty"`
 }
@@ -16,7 +20,7 @@ var EmptyExpression = &Expression{
 }
 
 // TODO: если нет ни одного expression, то выводить сообщение об их отсутствии
-func ExpressionsOutput(w http.ResponseWriter, r *http.Request) { //Сервер, который выводит все переданные серверу выражения
+func (o *Orchestrator) ExpressionsOutput(w http.ResponseWriter, r *http.Request) { //Сервер, который выводит все переданные серверу выражения
 	var (
 		mu sync.Mutex
 		wt JWTforExpr
@@ -60,5 +64,5 @@ func ExpressionsOutput(w http.ResponseWriter, r *http.Request) { //Сервер,
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"expressions": exprs})
+	json.NewEncoder(w).Encode(SlExprsResp{Expressions: exprs})
 }

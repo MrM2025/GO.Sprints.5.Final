@@ -8,6 +8,10 @@ import (
 	//"strconv"
 )
 
+type ExprResp struct {
+	Expression *Expression `json:"expression,omitempty"`
+}
+
 type IDForExpression struct {
 	ID  string `json:"id,omitempty"`
 	JWT string `json:"jwt,omitempty"`
@@ -17,7 +21,7 @@ var (
 	mu sync.Mutex
 )
 
-func ExpressionByID(w http.ResponseWriter, r *http.Request) {
+func (o *Orchestrator) ExpressionByID(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -45,5 +49,6 @@ func ExpressionByID(w http.ResponseWriter, r *http.Request) {
 		expr.Result = math.Round(expr.AST.Value*100) / 100
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{"expression": expr})
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(ExprResp{Expression: expr})
 }

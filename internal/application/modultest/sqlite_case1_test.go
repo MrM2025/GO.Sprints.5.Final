@@ -25,7 +25,7 @@ type Resp struct {
 }
 
 type JSONWebToken struct {
-	jwt string
+	Jwt string
 }
 
 // CASE 1
@@ -33,7 +33,7 @@ func TestDBC1(t *testing.T) {
 //// Deleting the db tables for a new test
 	ctx := context.TODO()
 
-	db, err := sql.Open("sqlite3", "teststore1.db")
+	db, err := sql.Open("sqlite3", "teststore.db")
 	if err != nil {
 		panic(err)
 	}
@@ -111,7 +111,7 @@ func TestDBC1(t *testing.T) {
 	json.NewDecoder(res.Body).Decode(&rs)
 	
 	qj := `SELECT jwt FROM users WHERE login = ?`
-	db.QueryRowContext(ctx, qj, reqs.Login).Scan(&j.jwt)
+	db.QueryRowContext(ctx, qj, reqs.Login).Scan(&j.Jwt)
 
 	expectedStatus := "Successful sign in"
 
@@ -120,7 +120,7 @@ func TestDBC1(t *testing.T) {
 		return
 	}
 
-	if rs.Jwt != j.jwt {
+	if rs.Jwt != j.Jwt {
 		t.Fatal("Incorrect JSON Web Token")
 		return
 	}
