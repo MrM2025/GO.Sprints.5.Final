@@ -90,7 +90,7 @@ type OrchResJSON struct {
 type Expression struct {
 	ID     string   `json:"id,omitempty"`
 	Expr   string   `json:"expression,omitempty"`
-	Jwt    string   `json:"jwt,omitempty"`
+	Jwt    string   `json:"-"`
 	Status string   `json:"status,omitempty"`
 	Result float64  `json:"result,omitempty"`
 	AST    *ASTNode `json:"-"`
@@ -170,6 +170,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 
 	request := new(OrchReqJSON)
 	defer r.Body.Close()
+
 	dec := json.NewDecoder(r.Body) //Достаем выражение
 	dec.DisallowUnknownFields()
 	err := dec.Decode(&request)
@@ -219,7 +220,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 	expr := &Expression{
 		ID:     exprID,
 		Expr:   request.Expression,
-		Jwt: request.JWT,
+		Jwt:    request.JWT,
 		Status: "pending",
 		AST:    ast,
 	}

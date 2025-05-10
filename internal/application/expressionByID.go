@@ -9,13 +9,13 @@ import (
 )
 
 type IDForExpression struct {
-	ID string `json:"id,omitempty"`
+	ID  string `json:"id,omitempty"`
+	JWT string `json:"jwt,omitempty"`
 }
 
 func ExpressionByID(w http.ResponseWriter, r *http.Request) {
 	var (
 		mu sync.Mutex
-		//o *Orchestrator
 	)
 
 	mu.Lock()
@@ -26,7 +26,7 @@ func ExpressionByID(w http.ResponseWriter, r *http.Request) {
 
 	expr, ok := exprStore[request.ID]
 
-	if !ok {
+	if !ok || request.JWT != expr.Jwt {
 		http.Error(w, `{"error":"Expression not found"}`, http.StatusNotFound)
 		return
 	}
