@@ -13,19 +13,28 @@ type IDForExpression struct {
 	JWT string `json:"jwt,omitempty"`
 }
 
-func ExpressionByID(w http.ResponseWriter, r *http.Request) {
-	var (
-		mu sync.Mutex
-	)
+var (
+	mu sync.Mutex
+)
 
+func ExpressionByID(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
 
 	request := new(IDForExpression)
 	json.NewDecoder(r.Body).Decode(&request)
 
-	expr, ok := exprStore[request.ID]
+	err := strimJWT("User", request.JWT)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode("Session time is up, please, sign in again")
+		return
+	}
 
+	expr, ok := exprStore[request.ID]
+	
 	if !ok || request.JWT != expr.Jwt {
 		http.Error(w, `{"error":"Expression not found"}`, http.StatusNotFound)
 		return
@@ -36,6 +45,5 @@ func ExpressionByID(w http.ResponseWriter, r *http.Request) {
 		expr.Result = math.Round(expr.AST.Value*100) / 100
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"expression": expr})
 }

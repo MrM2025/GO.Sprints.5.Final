@@ -79,6 +79,7 @@ func NewOrchestrator(db *sql.DB, ctx context.Context) *Orchestrator {
 
 type OrchReqJSON struct {
 	Expression string `json:"expression"`
+	Login      string `json:"login,omitempty"`
 	JWT        string `json:"jwt,omitempty"`
 }
 
@@ -91,6 +92,7 @@ type Expression struct {
 	ID     string   `json:"id,omitempty"`
 	Expr   string   `json:"expression,omitempty"`
 	Jwt    string   `json:"-"`
+	Login  string   `json:"login,omitempty"`
 	Status string   `json:"status,omitempty"`
 	Result float64  `json:"result,omitempty"`
 	AST    *ASTNode `json:"-"`
@@ -162,6 +164,7 @@ var divbyzeroeerr error
 func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Сервер, который принимает арифметическое выражение, переводит его в набор последовательных задач и обеспечивает порядок их выполнения.
 	var (
 		emsg string
+		lgid int
 	)
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -176,6 +179,19 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 	err := dec.Decode(&request)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if o.Db.QueryRowContext(o.ctx, "SELECT COUNT(1) FROM users WHERE login = ?", request.Login).Scan(&lgid); lgid == 0 {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode("Incorrect login")
+		return
+	}
+
+	err = strimJWT(request.Login, request.JWT)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode("Session time is up, please, sign in again")
 		return
 	}
 
@@ -221,6 +237,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		ID:     exprID,
 		Expr:   request.Expression,
 		Jwt:    request.JWT,
+		Login:  request.Login,
 		Status: "pending",
 		AST:    ast,
 	}
@@ -300,7 +317,7 @@ func (o *Orchestrator) PostTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	o.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"result accepted"}`))
+	w.Write([]byte(`{"status":"Result accepted"}`))
 }
 
 func makeAnAtomicExpr(Operation string, Arg1, Arg2 float64) (string, error) {

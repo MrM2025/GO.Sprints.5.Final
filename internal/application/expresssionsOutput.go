@@ -19,7 +19,7 @@ var EmptyExpression = &Expression{
 func ExpressionsOutput(w http.ResponseWriter, r *http.Request) { //Сервер, который выводит все переданные серверу выражения
 	var (
 		mu sync.Mutex
-		ut JWTforExpr
+		wt JWTforExpr
 	)
 
 	mu.Lock()
@@ -27,15 +27,22 @@ func ExpressionsOutput(w http.ResponseWriter, r *http.Request) { //Сервер,
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewDecoder(r.Body).Decode(&ut); err != nil {
-		http.Error(w, "Decoding jtw error", http.StatusConflict)
+	if err := json.NewDecoder(r.Body).Decode(&wt); err != nil {
+		http.Error(w, "Decoding jwt error", http.StatusConflict)
+		return
+	}
+
+	err := strimJWT("User", wt.JWT)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode("Session time is up, please, sign in again")
 		return
 	}
 
 	exprs := make([]*Expression, 0, len(exprStore))
 
 	for _, expr := range exprStore {
-		if expr.Jwt != ut.JWT {
+		if expr.Jwt != wt.JWT {
 			continue
 		}
 
@@ -46,5 +53,12 @@ func ExpressionsOutput(w http.ResponseWriter, r *http.Request) { //Сервер,
 		exprs = append(exprs, expr)
 	}
 
+	if len(exprs) == 0 {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode("Nothing to post")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{"expressions": exprs})
 }

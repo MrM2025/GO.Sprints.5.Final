@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
 	//"os"
 	//"log"
 	"net/http"
@@ -16,8 +17,8 @@ import (
 )
 
 type Rsp struct {
-	Status string `json:"status"`
-	Jwt    string `json:"jwt"`
+	Status string `json:"status,omitempty"`
+	Jwt    string `json:"jwt,omitempty"`
 }
 
 type User struct {
@@ -250,16 +251,29 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 	var h HASH
 
 	// TODO: если нет логина, сказать, что он неправильный
-	o.Db.QueryRowContext(o.ctx, q, u.Login).Scan(&h.hash)
+	err = o.Db.QueryRowContext(o.ctx, q, u.Login).Scan(&h.hash)
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows in result set") {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode("Incorrect login")
+			return
+		}
+	}
 
 	er := compare(h.hash, u.Password)
 	if er != nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(Rsp{Status:"Incorrect password"})
+		json.NewEncoder(w).Encode(Rsp{Status: "Incorrect password"})
 		return
 	}
 
 	jwt := AddJWT(u.Login)
+
+	for _, expr := range exprStore {
+		if expr.Login == u.Login {
+			expr.Jwt = jwt
+		}
+	}
 
 	_, err = o.Db.ExecContext(o.ctx, up, jwt, u.Login)
 	if err != nil {
@@ -319,7 +333,9 @@ func (o *Orchestrator) DTBs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode("everything has been deleted")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode("Everything has been deleted")
+	//json.NewEncoder(w).Encode(`{"status":"Everything has been deleted"}`)
 
 }
 
