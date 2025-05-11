@@ -4,7 +4,7 @@
 К сожалению, я слишком поздно сообразил, что без абстрактного синтаксического дереваб разбиение на атомарные операции плохореализуемо, поэтому был вынужден взять чужой код построения дерева отсюда: https://github.com/Killered672/Module2calc/blob/main/internal/orchestrator/astnode.go и встроить его  у себя (
 
 ### Описание
-Этот проект реализует веб-сервис, который вычисляет арифметические выражения, переданные пользователем через HTTP-запрос.
+Проект содержит в себе многопользовательский режим (регистрация и вход), хранение выражений в SQLite, общение вычислителя и сервера вычислений реализовано с помощью GRPC, проект покрыт модульными тестами.
 
 
 
@@ -12,7 +12,7 @@
 #### Через git Bash
 С помощью
 ``` bash
- git clone github.com/MrM2025/Project-3/tree/main/Sprint_2/calc_go
+ git clone https://github.com/MrM2025/Project-3/tree/main/Sprint_2/calc_go
  ```
 сделайте клон проекта.
 
@@ -36,10 +36,41 @@ go run cmd/Orchestrator_start/main.go
 
 
 Для git bash:
-``` bash
-curl --location 'localhost:8080/api/v1/calculate' --header 'Content-Type: application/json' --data '{ "expression": "-1+1*2.54+41+((3/3+10)/2-(-2.5-1+(-1))*10)-1" }'
+
+```bash
+Регистрация: 
+    curl --location 'localhost:8080/api/v1/register' --header 'Content-Type: application/json' --data '{"login": "User", "Password": "123"}'
 ```
-(пример корректного запроса, код:200)
+
+```bash
+Вход:
+    curl --location 'localhost:8080/api/v1/login' --header 'Content-Type: application/json' --data '{"login": "User", "Password": "123"}'
+```
+
+``` bash
+Передача сервису выражение на вычисление:
+#!!! Важно: в поле jwt, нужно вставить токен, который был
+#!!! выдан при входе, иначе ничего не получится
+# (срок жизни сессии - 5 минут)
+    curl --location 'localhost:8080/api/v1/calculate' --header 'Content-Type: application/json' --data '{ "expression": "-1+1*2.54+41+((3/3+10)/2-(-2.5-1+(-1))*10)-1", "login": "User", "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE"}'
+```
+
+``` bash
+#!!! Важно: в поле jwt, нужно вставить токен, который был
+#!!! выдан при входе, иначе ничего не получится
+# (срок жизни сессии - 5 минут)
+Просмотр выражения по его ID:
+    curl --location 'localhost:8080/api/v1/expression/id' --header 'Content-Type: application/json' --data '{ "id": "1", "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE" }'
+```
+
+``` bash
+#!!! Важно: в поле jwt, нужно вставить токен, который был
+#!!! выдан при входе, иначе ничего не получится
+# (срок жизни сессии - 5 минут)
+Передача сервису выражение на вычисление:
+    curl --location 'localhost:8080/api/v1/expressions' --header 'Content-Type: application/json' --data '{ "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE"}'
+```
+
 
 #
 

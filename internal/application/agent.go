@@ -13,7 +13,6 @@ import (
 	pb "github.com/MrM2025/rpforcalc/tree/master/calc_go/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	
 )
 
 type AgentTask struct {
@@ -42,14 +41,14 @@ func NewAgent() *Agent {
 		cp = 1
 	}
 
-	grpcAddr := "localhost:8080"
+	grpcAddr := "localhost:9090"
 
 	conn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	client := pb.NewOrchestratorAgentServiceClient(conn)	
+	client := pb.NewOrchestratorAgentServiceClient(conn)
 
 	return &Agent{
 		ComputingPower: cp,

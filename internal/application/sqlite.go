@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -52,8 +53,9 @@ func (o *Orchestrator) CreateTables() error {
 		user_lg TEXT NOT NULL,
 		status TEXT NOT NULL,
 		result REAL,
+		user_id INTEGER NOT NULL,
 	
-		FOREIGN KEY (user_lg) REFERENCES users(login) ON DELETE CASCADE
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);`
 	)
 
@@ -112,58 +114,30 @@ func (o *Orchestrator) AddUser(ctx context.Context, lg, hashed string, db *sql.D
 	return tx.Commit()
 }
 
-func (o *Orchestrator) GetExpr(id int, lg string) (*Expression, bool, error) {
-	var expr *Expression
-
-	rows, err := o.Db.QueryContext(
-		o.ctx,
-		`SELECT  expression, jwt, user_lg, status, result FROM expressions WHERE user_lg = $1 AND id = $2`,
-		lg,
-		id,
-	)
-
-	if err != nil {
-		return nil, false, fmt.Errorf("query error: %w", err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		if err = rows.Err(); err != nil {
-			return nil, false, fmt.Errorf("rows error: %w", err)
-		}
-
-		return nil, false, nil
-	}
-
-	if err = rows.Scan(
-		&expr.ID,
-		&expr.Expr,
-		&expr.Jwt,
-		&expr.Login,
-		&expr.Status,
-		expr.Result,
-	); err != nil {
-		return nil, false, fmt.Errorf("scan error: %w", err)
-	}
-
-	return expr, true, nil
-
-}
-
 func (o *Orchestrator) AddExpr(expr *Expression, rok bool, db *sql.DB) error {
+	id, err := strconv.Atoi(expr.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	up := `UPDATE expressions SET expression = $1, jwt = $2, user_lg = $3, status = $4 WHERE id = $5`
 
 	if !rok {
-		q := `INSERT INTO expressions(id, expression, jwt, user_lg, status, result) VALUES(?, ?, ?, ?, ?, ?)`
-		_, err := o.Db.ExecContext(o.ctx, q, expr.ID, expr.Expr, expr.Jwt, expr.Login, expr.Status, 1)
+		q := `INSERT INTO expressions(id, expression, jwt, user_lg, status) VALUES(?, ?, ?, ?, ?)`
+		_, err := o.Db.ExecContext(o.ctx, q, id, expr.Expr, expr.Jwt, expr.Login, expr.Status)
 		if err != nil {
+			if strings.Contains(err.Error(), "UNIQUE constraint failed: expressions.id") {
+				_, err := o.Db.ExecContext(o.ctx, up, expr.Expr, expr.Jwt, expr.Login, expr.Status, expr.ID)
+				return err
+			}
 			return err
 		}
 
 		return nil
 	}
 
-	up := `UPDATE users SET status = $1, result = $2 WHERE id = $3 AND user_lg = $4`
-	_, err := o.Db.ExecContext(o.ctx, up, expr.Status, expr.Result, expr.ID, expr.Login)
+	up = `UPDATE expressions SET status = $1, result = $2 WHERE id = $3 AND user_lg = $4`
+	_, err = o.Db.ExecContext(o.ctx, up, expr.Status, expr.Result, id, expr.Login)
 	if err != nil {
 		return err
 	}
@@ -175,9 +149,10 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var (
-		u  User
-		h  Hash
-		id int = 0
+		u     User
+		h     Hash
+		expr  *Expression = &Expression{}
+		idnum int
 	)
 
 	err := json.NewDecoder(r.Body).Decode(&u)
@@ -206,21 +181,51 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for {
-		id++
-		expr, ok, err := o.GetExpr(id, u.Login)
-		if !ok {
-			if err != nil
+	err = o.Db.QueryRowContext(
+		o.ctx,
+		`SELECT COUNT(id) FROM expressions`,
+	).Scan(&idnum)
+
+	for id := range idnum {
+		rows, err := o.Db.QueryContext(
+			o.ctx,
+			`SELECT expression, jwt, user_lg, status, result FROM expressions WHERE id = ?`,
+			id,
+		)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		if !rows.Next() {
+			// Проверяем, не было ли ошибок при получении данных
+			if err := rows.Err(); err != nil {
+				log.Fatalf("ошибка при чтении строк: %w", err)
+			}
+			break // Данных нет, но ошибок тоже нет
 		}
 
-		o.exprCounter = id
+		if err = rows.Scan(
+			&expr.Expr,
+			&expr.Jwt,
+			&expr.Login,
+			&expr.Status,
+			&expr.Result,
+		); err != nil {
+			log.Fatal(err)
+		}
+
 		expr.ID = strconv.Itoa(id)
 		exprStore[expr.ID] = expr
 
 		if expr.Status != "completed" {
 			o.Tasks(expr)
 		}
+
 	}
+
+	o.exprCounter = idnum
 
 	jwt := AddJWT(u.Login)
 

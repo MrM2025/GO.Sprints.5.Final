@@ -18,6 +18,7 @@ import (
 	pb "github.com/MrM2025/rpforcalc/tree/master/calc_go/proto"
 	_ "github.com/mattn/go-sqlite3"
 	"google.golang.org/grpc"
+	//"google.golang.org/grpc/code"
 )
 
 type Config struct {
@@ -167,8 +168,10 @@ var divbyzeroeerr error
 
 func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Сервер, который принимает арифметическое выражение, переводит его в набор последовательных задач и обеспечивает порядок их выполнения.
 	var (
-		emsg string
-		lgid int
+		emsg  string
+		lgid  int
+		idnum int
+		expr  *Expression = &Expression{}
 	)
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -198,6 +201,52 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		json.NewEncoder(w).Encode("Session time is up, please, sign in again")
 		return
 	}
+
+	err = o.Db.QueryRowContext(
+		o.ctx,
+		`SELECT COUNT(id) FROM expressions`,
+	).Scan(&idnum)
+
+	for id := range idnum {
+		rows, err := o.Db.QueryContext(
+			o.ctx,
+			`SELECT expression, jwt, user_lg, status, result FROM expressions WHERE id = ?`,
+			id,
+		)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		if !rows.Next() {
+			// Проверяем, не было ли ошибок при получении данных
+			if err := rows.Err(); err != nil {
+				log.Fatalf("ошибка при чтении строк: %w", err)
+			}
+			break // Данных нет, но ошибок тоже нет
+		}
+
+		if err = rows.Scan(
+			&expr.Expr,
+			&expr.Jwt,
+			&expr.Login,
+			&expr.Status,
+			&expr.Result,
+		); err != nil {
+			log.Fatal(err)
+		}
+
+		expr.ID = strconv.Itoa(id)
+		exprStore[expr.ID] = expr
+
+		if expr.Status != "completed" {
+			o.Tasks(expr)
+		}
+
+	}
+
+	o.exprCounter = idnum
 
 	ok, err := calc.IsCorrectExpression(request.Expression) // Проверяем выражение на наличие ошибок
 
@@ -237,7 +286,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		return
 	}
 
-	expr := &Expression{
+	expr = &Expression{
 		ID:     exprID,
 		Expr:   request.Expression,
 		Jwt:    request.JWT,
