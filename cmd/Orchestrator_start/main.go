@@ -22,7 +22,7 @@ func main() {
 	err = db.PingContext(ctx)
 	if err != nil {
 		log.Fatal(err)
-		return	
+		return
 	}
 
 	app := application.NewOrchestrator(db, ctx)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	//"os"
@@ -26,7 +27,7 @@ type User struct {
 	Password string `json:"password"`
 }
 
-type hs struct {
+type Hash struct {
 	hash string
 }
 
@@ -45,9 +46,9 @@ func (o *Orchestrator) CreateTables() error {
 
 		expressionsTable = `
 	CREATE TABLE IF NOT EXISTS expressions(
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id INTEGER PRIMARY KEY,
 		expression TEXT NOT NULL,
-		jwt TEXT NOT NULL
+		jwt TEXT NOT NULL,
 		user_lg TEXT NOT NULL,
 		status TEXT NOT NULL,
 		result REAL,
@@ -111,92 +112,58 @@ func (o *Orchestrator) AddUser(ctx context.Context, lg, hashed string, db *sql.D
 	return tx.Commit()
 }
 
-func (o *Orchestrator) AddExpr(Expr, st string, res float64, rok bool, db *sql.DB) error {
+func (o *Orchestrator) GetExpr(id int, lg string) (*Expression, bool, error) {
+	var expr *Expression
+
+	rows, err := o.Db.QueryContext(
+		o.ctx,
+		`SELECT  expression, jwt, user_lg, status, result FROM expressions WHERE user_lg = $1 AND id = $2`,
+		lg,
+		id,
+	)
+
+	if err != nil {
+		return nil, false, fmt.Errorf("query error: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err = rows.Err(); err != nil {
+			return nil, false, fmt.Errorf("rows error: %w", err)
+		}
+
+		return nil, false, nil
+	}
+
+	if err = rows.Scan(
+		&expr.ID,
+		&expr.Expr,
+		&expr.Jwt,
+		&expr.Login,
+		&expr.Status,
+		expr.Result,
+	); err != nil {
+		return nil, false, fmt.Errorf("scan error: %w", err)
+	}
+
+	return expr, true, nil
+
+}
+
+func (o *Orchestrator) AddExpr(expr *Expression, rok bool, db *sql.DB) error {
 
 	if !rok {
-		q := `
-			INSERT INTO expressions (Expression, Status) values ($2, $3)					
-		`
-
-		_, err := o.Db.ExecContext(o.ctx, q, Expr, st)
+		q := `INSERT INTO expressions(id, expression, jwt, user_lg, status, result) VALUES(?, ?, ?, ?, ?, ?)`
+		_, err := o.Db.ExecContext(o.ctx, q, expr.ID, expr.Expr, expr.Jwt, expr.Login, expr.Status, 1)
 		if err != nil {
 			return err
 		}
 
 		return nil
-
 	}
 
-	q := `
-			INSERT INTO expressions (Expression, Status, Result) values ($2, $3, $4)					
-	`
-
-	o.mu.Lock()
-	_, err := o.Db.ExecContext(o.ctx, q, Expr, st)
-	o.mu.Unlock()
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Будет ли db принимать bool за 1 и 9, и автоматом переводить в int?
-// Всегда ли задействуется ASTNode(Логично, что да, но все же)-->
-func (o *Orchestrator) AddTask(id, exprID string, arg1, arg2 float64, op string, opt int, node *ASTNode) error {
-	qt := `
-		INSERT INTO task (ID, ExprID, Arg1, Arg2, Operation, Operation_time) values ($1, $2, $3, $4, $5, $6)
-	`
-
-	qn := `
-		INSERT INTO ASTNode (IsLeaf, Value, Operator, TaskSheduled) values ($2, $3, $4, $7)
-	`
-
-	// Если второе - да, то -->
-	o.mu.Lock()
-	_, err := o.Db.ExecContext(o.ctx, qn, node.IsLeaf, node.Value, node.Operator, node.TaskScheduled)
-	o.mu.Unlock()
-
-	if err != nil {
-		return err
-	}
-
-	if node.Left != nil {
-		LeftIDCounter++
-		ql := `
-			INSERT INTO ASTNode (IsLeaf, Value, Operator, Left, TaskSdeduled) values ($2, $3, $4, $5, $7)
-		`
-
-		o.mu.Lock()
-		_, err := o.Db.ExecContext(o.ctx, ql, node.Left.IsLeaf, node.Left.Value, node.Left.Operator, LeftIDCounter, node.Left.TaskScheduled)
-		o.mu.Unlock()
-
-		if err != nil {
-			return err
-		}
-
-		if node.Right != nil {
-			RightIDCounter++
-			qr := `
-			INSERT INTO ASTNode (IsLeaf, Value, Operator, Right, TaskSdeduled) values ($2, $3, $4, $6, $7)
-		`
-
-			o.mu.Lock()
-			_, err := o.Db.ExecContext(o.ctx, qr, node.Right.IsLeaf, node.Right.Value, node.Right.Operator, RightIDCounter, node.Right.TaskScheduled)
-			o.mu.Unlock()
-
-			if err != nil {
-				return err
-			}
-
-		}
-	}
-
-	o.mu.Lock()
-	_, err = o.Db.ExecContext(o.ctx, qt, id, exprID, arg1, arg2, op, opt)
-	o.mu.Unlock()
-
+	up := `UPDATE users SET status = $1, result = $2 WHERE id = $3 AND user_lg = $4`
+	_, err := o.Db.ExecContext(o.ctx, up, expr.Status, expr.Result, expr.ID, expr.Login)
 	if err != nil {
 		return err
 	}
@@ -207,7 +174,11 @@ func (o *Orchestrator) AddTask(id, exprID string, arg1, arg2 float64, op string,
 func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var u User
+	var (
+		u  User
+		h  Hash
+		id int = 0
+	)
 
 	err := json.NewDecoder(r.Body).Decode(&u)
 	if err != nil {
@@ -217,12 +188,6 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 
 	q := `SELECT hash FROM users WHERE login = ?`
 	up := `UPDATE users SET jwt= $1 WHERE login = $2`
-
-	type HASH struct {
-		hash string
-	}
-
-	var h HASH
 
 	// TODO: если нет логина, сказать, что он неправильный
 	err = o.Db.QueryRowContext(o.ctx, q, u.Login).Scan(&h.hash)
@@ -241,6 +206,22 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for {
+		id++
+		expr, ok, err := o.GetExpr(id, u.Login)
+		if !ok {
+			if err != nil
+		}
+
+		o.exprCounter = id
+		expr.ID = strconv.Itoa(id)
+		exprStore[expr.ID] = expr
+
+		if expr.Status != "completed" {
+			o.Tasks(expr)
+		}
+	}
+
 	jwt := AddJWT(u.Login)
 
 	for _, expr := range exprStore {
@@ -255,8 +236,6 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(Rsp{Status: err.Error()})
 		return
 	}
-
-
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(Rsp{Status: "Successful sign in", Jwt: jwt})

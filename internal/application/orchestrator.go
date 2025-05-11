@@ -249,14 +249,13 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Ð
 	exprStore[exprID] = expr
 	o.Tasks(expr)
 
-	q := `INSERT INTO expressions(id, expression, jwt, user_lg, status) VALUES(?, ?, ?, ?, ?)`
-
-	rs, err := o.Db.ExecContext(o.ctx, q, expr.ID, expr.Expr, expr.Jwt, expr.Login, expr.Status)
+	err = o.AddExpr(expr, false, o.Db)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(`Sorry, something went wrong, try again later`)
 		log.Fatal(err)
+		return
 	}
-	
-	log.Println(rs)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(OrchResJSON{ID: exprID})
@@ -302,6 +301,13 @@ func (o *Orchestrator) Post(ctx context.Context, in *pb.PostRequest) (*pb.Empty,
 			expr.Status = "completed"
 			expr.Result = expr.AST.Value
 		}
+
+		err := o.AddExpr(expr, true, o.Db)
+		if err != nil {
+			log.Fatal(err)
+			return nil, err
+		}
+
 	}
 
 	o.mu.Unlock()
@@ -366,7 +372,7 @@ func (o *Orchestrator) RunOrchestrator() {
 
 	go func() {
 		log.Println("HTTP listening on", o.Config.Addr)
-		if err := http.ListenAndServe(":" + o.Config.Addr, mux); err != nil {
+		if err := http.ListenAndServe(":"+o.Config.Addr, mux); err != nil {
 			log.Fatal(err)
 		}
 	}()
@@ -375,9 +381,9 @@ func (o *Orchestrator) RunOrchestrator() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	grpcSrv := grpc.NewServer()
 	pb.RegisterOrchestratorAgentServiceServer(grpcSrv, o)
-	log.Println("gRPC listening on 9090")	
+	log.Println("gRPC listening on 9090")
 	grpcSrv.Serve(lis)
 }
