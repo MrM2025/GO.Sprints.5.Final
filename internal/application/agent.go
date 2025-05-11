@@ -1,17 +1,19 @@
 package application
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
+	pb "github.com/MrM2025/rpforcalc/tree/master/calc_go/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	
 )
 
 type AgentTask struct {
@@ -30,9 +32,8 @@ type AgentResJSON struct {
 }
 
 type Agent struct {
-	ComputingPower  int
-	OrchestratorURL string
-	client          *http.Client
+	ComputingPower int
+	grpcClient     pb.OrchestratorAgentServiceClient
 }
 
 func NewAgent() *Agent {
@@ -41,48 +42,30 @@ func NewAgent() *Agent {
 		cp = 1
 	}
 
-	orchestratorURL := os.Getenv("ORCHESTRATOR_URL")
+	grpcAddr := "localhost:8080"
 
-	if orchestratorURL == "" {
-		orchestratorURL = "http://localhost:8080"
+	conn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	client := pb.NewOrchestratorAgentServiceClient(conn)	
+
 	return &Agent{
-		ComputingPower:  cp,
-		OrchestratorURL: orchestratorURL,
+		ComputingPower: cp,
+		grpcClient:     client,
 	}
 }
 
 func (a *Agent) worker() {
 	for {
-		resp, err := http.Get(a.OrchestratorURL + "/internal/task")
+		task, err := a.grpcClient.Get(context.Background(), &pb.Empty{})
 		if err != nil {
-			log.Printf("Worker: error getting task: %v", err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		if resp.StatusCode == http.StatusNotFound {
-			resp.Body.Close()
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		var taskResp struct {
-			Task struct {
-				ID            string  `json:"id"`
-				Arg1          float64 `json:"arg1"`
-				Arg2          float64 `json:"arg2"`
-				Operation     string  `json:"operation"`
-				OperationTime int     `json:"operation_time"`
-			} `json:"task"`
-		}
-		err = json.NewDecoder(resp.Body).Decode(&taskResp)
-		resp.Body.Close()
-		if err != nil {
-			time.Sleep(1 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 			continue
 		}
 
-		task := taskResp.Task
-		log.Printf("Worker: received task %s: %f %s %f, simulating %d ms", task.ID, task.Arg1, task.Operation, task.Arg2, task.OperationTime)
+		log.Printf("Worker: received task %s: %f %s %f, simulating %d ms", task.Id, task.Arg1, task.Operation, task.Arg2, task.OperationTime)
 		time.Sleep(time.Duration(task.OperationTime) * time.Millisecond)
 		divbyzeroeerr = nil
 		result, diverr := calculator(task.Operation, task.Arg1, task.Arg2)
@@ -91,19 +74,11 @@ func (a *Agent) worker() {
 			divbyzeroeerr = errorStore.DvsByZeroErr
 		}
 
-		resultPayload := map[string]interface{}{
-			"id":     task.ID,
-			"result": result,
-		}
-
-		payloadBytes, _ := json.Marshal(resultPayload)
-		respPost, err := http.Post(a.OrchestratorURL+"/internal/task", "application/json", bytes.NewReader(payloadBytes))
+		_, err = a.grpcClient.Post(context.Background(), &pb.PostRequest{Id: task.Id, Result: result})
 		if err != nil {
-			fmt.Errorf("%s", err)
+			log.Fatal(err)
 			return
 		}
-		respPost.Body.Close()
-
 	}
 }
 
@@ -129,6 +104,7 @@ func calculator(operator string, arg1, arg2 float64) (float64, error) {
 	return result, nil
 }
 
+/*
 func (a *Agent) SendResult(request *AgentTask, result []byte) {
 
 	_, err := strconv.Atoi(request.ID)
@@ -148,18 +124,19 @@ func (a *Agent) SendResult(request *AgentTask, result []byte) {
 		log.Printf("Error doing request: %v. Retrying in 2 seconds...", err)
 
 	}
-	/*
+
+
 		if res.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(res.Body)
 			log.Printf("Worker : error response posting result for task %v: %s", taskStore[ID-1], string(body))
 		} else {
 			log.Printf("Worker : successfully completed task %v with result %s", taskStore[ID-1], result)
 		}
-	*/
 
 	defer req.Body.Close()
 
 }
+*/
 
 func (a *Agent) RunAgent() {
 	for i := 0; i < a.ComputingPower; i++ {

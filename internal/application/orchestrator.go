@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -14,7 +15,9 @@ import (
 	"time"
 
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
+	pb "github.com/MrM2025/rpforcalc/tree/master/calc_go/proto"
 	_ "github.com/mattn/go-sqlite3"
+	"google.golang.org/grpc"
 )
 
 type Config struct {
@@ -57,6 +60,7 @@ func ConfigFromEnv() *Config {
 }
 
 type Orchestrator struct {
+	pb.UnsafeOrchestratorAgentServiceServer
 	Config      *Config
 	Db          *sql.DB
 	ctx         context.Context
@@ -250,18 +254,13 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Ð
 
 }
 
-func (o *Orchestrator) GetTaskHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, `Mehod error, expected: "GET"`, http.StatusMethodNotAllowed)
-		return
-	}
+func (o *Orchestrator) Get(ctx context.Context, _ *pb.Empty) (*pb.GetResponse, error) {
 
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	if len(o.taskQueue) == 0 {
-		http.Error(w, `{"Error":"No task available"}`, http.StatusNotFound)
-		return
+		return &pb.GetResponse{}, fmt.Errorf("No task available")
 	}
 
 	task := o.taskQueue[0]
@@ -271,41 +270,22 @@ func (o *Orchestrator) GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 		expr.Status = "in_progress"
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"task": task})
-	defer r.Body.Close()
-
+	return &pb.GetResponse{Id: task.ID, Arg1: task.Arg1, Arg2: task.Arg2, Operation: task.Operation, OperationTime: int32(task.Operation_time)}, nil
 }
 
-func (o *Orchestrator) PostTaskHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error":"Wrong Method"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req struct {
-		ID     string  `json:"id"`
-		Result float64 `json:"result"`
-	}
-
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil || req.ID == "" {
-		http.Error(w, `{"error":"Invalid Body"}`, http.StatusUnprocessableEntity)
-		return
-	}
+func (o *Orchestrator) Post(ctx context.Context, in *pb.PostRequest) (*pb.Empty, error) {
 
 	o.mu.Lock()
-	task, ok := o.taskStore[req.ID]
+	task, ok := o.taskStore[in.Id]
 
 	if !ok {
 		o.mu.Unlock()
-		http.Error(w, `{"error":"Task not found"}`, http.StatusNotFound)
-		return
+		return nil, fmt.Errorf("No task available")
 	}
 
 	task.Node.IsLeaf = true
-	task.Node.Value = req.Result
-	delete(o.taskStore, req.ID)
+	task.Node.Value = in.Result
+	delete(o.taskStore, in.Id)
 
 	if expr, exists := exprStore[task.ExprID]; exists {
 		o.Tasks(expr)
@@ -316,8 +296,8 @@ func (o *Orchestrator) PostTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	o.mu.Unlock()
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"Result accepted"}`))
+
+	return nil, nil
 }
 
 func makeAnAtomicExpr(Operation string, Arg1, Arg2 float64) (string, error) {
@@ -363,14 +343,6 @@ func (o *Orchestrator) RunOrchestrator() {
 	mux.HandleFunc("/api/v1/login", o.SignIn)
 	mux.HandleFunc("/api/v1/DTBs", o.DTBs)
 	//mux.HandleFunc("/api/v1/DDB", o.DDB)
-	mux.HandleFunc("/internal/task", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			o.GetTaskHandler(w, r)
-
-		} else if r.Method == http.MethodPost {
-			o.PostTaskHandler(w, r)
-		}
-	})
 
 	go func() {
 		for {
@@ -383,6 +355,20 @@ func (o *Orchestrator) RunOrchestrator() {
 		}
 	}()
 
-	http.ListenAndServe(":"+o.Config.Addr, nil)
+	go func() {
+		log.Println("HTTP listening on", o.Config.Addr)
+		if err := http.ListenAndServe(":" + o.Config.Addr, mux); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
+	lis, err := net.Listen("tcp", ":9090")
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	grpcSrv := grpc.NewServer()
+	pb.RegisterOrchestratorAgentServiceServer(grpcSrv, o)
+	log.Println("gRPC listening on 9090")	
+	grpcSrv.Serve(lis)
 }

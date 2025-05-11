@@ -1,0 +1,25 @@
+syntax= "proto3";
+package proto;
+option go_package = "github.com/MrM2025/rpforcalc/tree/master/calc_go/proto";
+
+message Empty {
+
+}
+
+message GetResponse {
+     string id = 1;
+	double arg1 = 3;    
+	double arg2 = 4; 
+	string operation = 5;
+	int32 operation_time = 6;
+}
+
+message PostRequest {
+     string id = 1;
+     double result = 2;
+}
+
+service OrchestratorAgentService {
+     rpc Get(Empty) returns (GetResponse);
+     rpc Post(PostRequest) returns (Empty);
+}
