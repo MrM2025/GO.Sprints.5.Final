@@ -9,6 +9,7 @@
 
 
 ## Запуск 
+Пропишите go mod tidy находясь в корневой папке
 #### Через git Bash
 С помощью
 ``` bash
@@ -42,19 +43,32 @@ go run cmd/Orchestrator_start/main.go
     curl --location 'localhost:8080/api/v1/register' --header 'Content-Type: application/json' --data '{"login": "User", "Password": "123"}'
 ```
 
+Ожидаемый ответ: 
+{
+    "status": "Successful sign up"
+}
+
 ```bash
 Вход:
     curl --location 'localhost:8080/api/v1/login' --header 'Content-Type: application/json' --data '{"login": "User", "Password": "123"}'
 ```
+Ожидаемый ответ: 
+{
+    "status": "Successful sign in",
+    "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTU5NTMsImlhdCI6MTc0Njk5NTY1MywibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTU2NTN9.psRkEawQV0wz-T3XtxEqlfRCJeJ_9TT1LSv7vuj2FgA"
+}
 
 ``` bash
 Передача сервису выражение на вычисление:
 #!!! Важно: в поле jwt, нужно вставить токен, который был
 #!!! выдан при входе, иначе ничего не получится
 # (срок жизни сессии - 5 минут)
-    curl --location 'localhost:8080/api/v1/calculate' --header 'Content-Type: application/json' --data '{ "expression": "-1+1*2.54+41+((3/3+10)/2-(-2.5-1+(-1))*10)-1", "login": "User", "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE"}'
+    curl --location 'localhost:8080/api/v1/calculate' --header 'Content-Type: application/json' --data '{ "expression": "1-1+1", "login": "User", "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE"}'
 ```
-
+Ожидаемый ответ:
+{
+    "id": "1"
+}
 ``` bash
 #!!! Важно: в поле jwt, нужно вставить токен, который был
 #!!! выдан при входе, иначе ничего не получится
@@ -62,7 +76,18 @@ go run cmd/Orchestrator_start/main.go
 Просмотр выражения по его ID:
     curl --location 'localhost:8080/api/v1/expression/id' --header 'Content-Type: application/json' --data '{ "id": "1", "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE" }'
 ```
-
+Ожидаемый ответ: 
+{
+    "expression": [
+        {
+            "id": "1",
+            "expression": "1-1+1",
+            "login": "User",
+            "status": "completed",
+            "result": 1
+        }
+    ]
+}
 ``` bash
 #!!! Важно: в поле jwt, нужно вставить токен, который был
 #!!! выдан при входе, иначе ничего не получится
@@ -70,7 +95,18 @@ go run cmd/Orchestrator_start/main.go
 Передача сервису выражение на вычисление:
     curl --location 'localhost:8080/api/v1/expressions' --header 'Content-Type: application/json' --data '{ "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE"}'
 ```
-
+Ожидаемый ответ: 
+{
+    "expression": [
+        {
+            "id": "1",
+            "expression": "1-1+1",
+            "login": "User",
+            "status": "completed",
+            "result": 1
+        }
+    ]
+}
 
 #
 
