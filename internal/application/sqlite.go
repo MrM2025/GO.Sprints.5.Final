@@ -47,38 +47,12 @@ func (o *Orchestrator) CreateTables() error {
 	CREATE TABLE IF NOT EXISTS expressions(
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		expression TEXT NOT NULL,
+		jwt TEXT NOT NULL
+		user_lg TEXT NOT NULL,
 		status TEXT NOT NULL,
 		result REAL,
-		user_id INTEGER NOT NULL,
 	
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);`
-
-		taskTable = `
-	CREATE TABLE IF NOT EXISTS tasks(
-		id TEXT PRIMARY KEY,
-		expr_id TEXT NOT NULL,
-		arg1 REAL,
-		arg2 REAL,
-		operation TEXT NOT NULL,
-		operation_time INTEGER NOT NULL,
-		node INTEGER,
-	
-		FOREIGN KEY (node) REFERENCES ASTNode(id) ON DELETE CASCADE
-	);`
-
-		ASTNodeTable = `
-	CREATE TABLE IF NOT EXISTS ASTNode(
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		is_leaf INTEGER NOT NULL CHECK (is_leaf IN (0, 1)),
-		value REAL,
-		operator TEXT,
-		left INTEGER,
-		right INTEGER,
-		task_scheduled INTEGER NOT NULL CHECK (task_scheduled IN (0, 1)),
-	
-		FOREIGN KEY (left) REFERENCES ASTNode(id) ON DELETE CASCADE,
-		FOREIGN KEY (right) REFERENCES ASTNode(id) ON DELETE CASCADE
+		FOREIGN KEY (user_lg) REFERENCES users(login) ON DELETE CASCADE
 	);`
 	)
 
@@ -277,9 +251,12 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 
 	_, err = o.Db.ExecContext(o.ctx, up, jwt, u.Login)
 	if err != nil {
-		http.Error(w, fmt.Sprintln(err), http.StatusConflict)
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(Rsp{Status: err.Error()})
 		return
 	}
+
+
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(Rsp{Status: "Successful sign in", Jwt: jwt})
@@ -319,7 +296,7 @@ func (o *Orchestrator) SignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode("Successful sign up")
+	json.NewEncoder(w).Encode(Rsp{Status: "Successful sign up"})
 
 }
 

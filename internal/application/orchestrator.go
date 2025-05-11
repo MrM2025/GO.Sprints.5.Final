@@ -249,6 +249,15 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Ð
 	exprStore[exprID] = expr
 	o.Tasks(expr)
 
+	q := `INSERT INTO expressions(id, expression, jwt, user_lg, status) VALUES(?, ?, ?, ?, ?)`
+
+	rs, err := o.Db.ExecContext(o.ctx, q, expr.ID, expr.Expr, expr.Jwt, expr.Login, expr.Status)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	log.Println(rs)
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(OrchResJSON{ID: exprID})
 
