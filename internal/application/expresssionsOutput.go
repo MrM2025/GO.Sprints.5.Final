@@ -43,9 +43,9 @@ func (o *Orchestrator) ExpressionsOutput(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	exprs := make([]*Expression, 0, len(exprStore))
+	exprs := make([]*Expression, 0, len(o.ExprStore))
 
-	for _, expr := range exprStore {
+	for _, expr := range o.ExprStore {
 		if expr.Jwt != wt.JWT {
 			continue
 		}

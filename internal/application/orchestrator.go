@@ -18,7 +18,6 @@ import (
 	pb "github.com/MrM2025/rpforcalc/tree/master/calc_go/proto"
 	_ "github.com/mattn/go-sqlite3"
 	"google.golang.org/grpc"
-	//"google.golang.org/grpc/code"
 )
 
 type Config struct {
@@ -64,21 +63,24 @@ type Orchestrator struct {
 	pb.UnsafeOrchestratorAgentServiceServer
 	Config      *Config
 	Db          *sql.DB
-	ctx         context.Context
+	ExprStore   map[string]*Expression
+	Ctx         context.Context
 	taskStore   map[string]*Task
 	taskQueue   []*Task
 	mu          sync.Mutex
-	exprCounter int
+	ExprCounter int
 	taskCounter int
 }
 
 func NewOrchestrator(db *sql.DB, ctx context.Context) *Orchestrator {
 	return &Orchestrator{
-		Config:    ConfigFromEnv(),
-		Db:        db,
-		ctx:       ctx,
-		taskStore: make(map[string]*Task),
-		taskQueue: make([]*Task, 0),
+		Config:      ConfigFromEnv(),
+		Db:          db,
+		Ctx:         ctx,
+		ExprStore:   make(map[string]*Expression),
+		ExprCounter: 0,
+		taskStore:   make(map[string]*Task),
+		taskQueue:   make([]*Task, 0),
 	}
 }
 
@@ -114,8 +116,7 @@ type Task struct {
 }
 
 var (
-	exprStore = make(map[string]*Expression)
-	calc      TCalc
+	calc TCalc
 )
 
 func (o *Orchestrator) Tasks(expr *Expression) {
@@ -168,10 +169,8 @@ var divbyzeroeerr error
 
 func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Сервер, который принимает арифметическое выражение, переводит его в набор последовательных задач и обеспечивает порядок их выполнения.
 	var (
-		emsg  string
-		lgid  int
-		idnum int
-		expr  *Expression = &Expression{}
+		emsg string
+		jwt  string
 	)
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -189,7 +188,12 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		return
 	}
 
-	if o.Db.QueryRowContext(o.ctx, "SELECT COUNT(1) FROM users WHERE login = ?", request.Login).Scan(&lgid); lgid == 0 {
+	if err = o.Db.QueryRowContext(o.Ctx, "SELECT jwt FROM users WHERE login = ?", request.Login).Scan(&jwt); jwt == "" {
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode("Session time is up, please, sign in again")
+			return
+		}
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode("Incorrect login")
 		return
@@ -200,53 +204,11 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode("Session time is up, please, sign in again")
 		return
+	} else if err == nil && request.JWT != jwt {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode("Incorrect jwt(probably from other user)")
+		return
 	}
-
-	err = o.Db.QueryRowContext(
-		o.ctx,
-		`SELECT COUNT(id) FROM expressions`,
-	).Scan(&idnum)
-
-	for id := range idnum {
-		rows, err := o.Db.QueryContext(
-			o.ctx,
-			`SELECT expression, jwt, user_lg, status, result FROM expressions WHERE id = ?`,
-			id,
-		)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer rows.Close()
-
-		if !rows.Next() {
-			// Проверяем, не было ли ошибок при получении данных
-			if err := rows.Err(); err != nil {
-				log.Fatalf("ошибка при чтении строк: %w", err)
-			}
-			break // Данных нет, но ошибок тоже нет
-		}
-
-		if err = rows.Scan(
-			&expr.Expr,
-			&expr.Jwt,
-			&expr.Login,
-			&expr.Status,
-			&expr.Result,
-		); err != nil {
-			log.Fatal(err)
-		}
-
-		expr.ID = strconv.Itoa(id)
-		exprStore[expr.ID] = expr
-
-		if expr.Status != "completed" {
-			o.Tasks(expr)
-		}
-
-	}
-
-	o.exprCounter = idnum
 
 	ok, err := calc.IsCorrectExpression(request.Expression) // Проверяем выражение на наличие ошибок
 
@@ -277,8 +239,8 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		return
 	}
 
-	o.exprCounter++
-	exprID := strconv.Itoa(o.exprCounter)
+	o.ExprCounter++
+	exprID := strconv.Itoa(o.ExprCounter)
 
 	ast, err := ParseAST(request.Expression)
 	if err != nil {
@@ -286,7 +248,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		return
 	}
 
-	expr = &Expression{
+	expr := &Expression{
 		ID:     exprID,
 		Expr:   request.Expression,
 		Jwt:    request.JWT,
@@ -295,7 +257,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		AST:    ast,
 	}
 
-	exprStore[exprID] = expr
+	o.ExprStore[exprID] = expr
 	o.Tasks(expr)
 
 	err = o.AddExpr(expr, false, o.Db)
@@ -323,7 +285,7 @@ func (o *Orchestrator) Get(ctx context.Context, _ *pb.Empty) (*pb.GetResponse, e
 	task := o.taskQueue[0]
 	o.taskQueue = o.taskQueue[1:]
 
-	if expr, exists := exprStore[task.ExprID]; exists {
+	if expr, exists := o.ExprStore[task.ExprID]; exists {
 		expr.Status = "in_progress"
 	}
 
@@ -344,7 +306,7 @@ func (o *Orchestrator) Post(ctx context.Context, in *pb.PostRequest) (*pb.Empty,
 	task.Node.Value = in.Result
 	delete(o.taskStore, in.Id)
 
-	if expr, exists := exprStore[task.ExprID]; exists {
+	if expr, exists := o.ExprStore[task.ExprID]; exists {
 		o.Tasks(expr)
 		if expr.AST.IsLeaf {
 			expr.Status = "completed"

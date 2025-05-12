@@ -1,7 +1,7 @@
 # Распределённый вычислитель арифметических выражений
 
 ### Описание
-Проект содержит в себе многопользовательский режим (регистрация и вход), хранение выражений в SQLite (персистенс, при старте приложения - оно инициализируется данными о выражениях из базы, в которую эти выражения стримятся пока приложение работает), общение вычислителя и сервера вычислений реализовано с помощью GRPC, проект покрыт модульными тестами (.\internal\application\module_and_integration_tests).
+Проект содержит в себе многопользовательский режим (регистрация и вход); хранение выражений в SQLite (персистенс, при старте приложения - оно инициализируется данными о выражениях из базы, в которую эти выражения стримятся пока приложение работает, посмотреть на структуру таблиц можно в .\internal\application\sqlite.go), общение вычислителя и сервера вычислений реализовано с помощью GRPC; проект покрыт модульными тестами (.\internal\application\module_and_integration_tests).
 
 
 
@@ -70,7 +70,7 @@ go run cmd/Orchestrator_start/main.go
 #!!! Важно: в поле jwt, нужно вставить токен, который был
 #!!! выдан при входе, иначе ничего не получится
 # (срок жизни сессии - 5 минут)
-Просмотр выражения по его ID:
+Получение выражения пользователя по ID выражения:
     curl --location 'localhost:8080/api/v1/expression/id' --header 'Content-Type: application/json' --data '{ "id": "1", "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE" }'
 ```
 Ожидаемый ответ: 
@@ -89,7 +89,7 @@ go run cmd/Orchestrator_start/main.go
 #!!! Важно: в поле jwt, нужно вставить токен, который был
 #!!! выдан при входе, иначе ничего не получится
 # (срок жизни сессии - 5 минут)
-Передача сервису выражение на вычисление:
+Получение всех выражений пользователя:
     curl --location 'localhost:8080/api/v1/expressions' --header 'Content-Type: application/json' --data '{ "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDY5OTQ3MjksImlhdCI6MTc0Njk5NDQyOSwibmFtZSI6IlVzZXIiLCJuYmYiOjE3NDY5OTQ0Mjl9.ILkn2O7HA-UFIPYZ8ed4Ab08vHx-vF8Wf29IKRHTjkE"}'
 ```
 Ожидаемый ответ: 
@@ -104,6 +104,13 @@ go run cmd/Orchestrator_start/main.go
         }
     ]
 }
+
+#
+
+Персистенс можно проверить:
+1. Запустив приложение и введя несколько выражений
+2. Завершить работу приложения
+3. Получить все вои выражения или избранное выражение (например: /api/v1/expressions) и убедиться, что все сохранено (не забыть использовать jwt в запросе, если токен протух, то не забыть для получения нового jwt выполнить Sign In)
 
 #
 
@@ -179,7 +186,7 @@ curl -i -X POST -H "Content-Type:application/json" -d "{\"expression\": \"1++*2\
 }
 
 ## Тесты
-Для тестирования перейдите в файл agent_calc_test.go и используйте команду go test или(для вывода дополнительной информации) go test -v
+Для тестирования перейдите в .\internal\application\module_and_integration_tests и используйте команду go test или(для вывода дополнительной информации) go test -v, для тестирования агента повторите тоже самое в (internal/application/agent_calc_test.go)
 
-Для запусков всех тестов разом воспользуйтесь - go test ./...
+Для запуска всех тестов одной командой, воспользуйтесь - go test ./... в корневой папке проекта
 

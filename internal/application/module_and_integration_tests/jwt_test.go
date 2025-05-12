@@ -56,9 +56,8 @@ type SlExprsResp struct {
 	Expressions []application.Expression `json:"expression,omitempty"`
 }
 
-
 func TestWithTwoUsers1(t *testing.T) {
-//// Deleting the db tables for a new test
+	//// Deleting the db tables for a new test
 	ctx := context.TODO()
 
 	db, err := sql.Open("sqlite3", "teststore.db")
@@ -85,7 +84,7 @@ func TestWithTwoUsers1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-//// SignUp
+	//// SignUp
 	handler := http.HandlerFunc(app.SignUp)
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -146,7 +145,7 @@ func TestWithTwoUsers1(t *testing.T) {
 		t.Fatalf("Expected status 201 , but got %d", res2.StatusCode)
 	}
 
-//// SignIn
+	//// SignIn
 	var (
 		rs1 Resp
 		rs2 Resp
@@ -227,7 +226,7 @@ func TestWithTwoUsers1(t *testing.T) {
 		return
 	}
 
-//// Adding the expression with specific user
+	//// Adding the expression with specific user
 	var (
 		rsp1 IDRps
 		rsp2 IDRps
@@ -305,7 +304,7 @@ func TestWithTwoUsers1(t *testing.T) {
 		t.Fatal(rsp2.Status)
 	}
 
-//// Comparing all the Users' expressions
+	//// Comparing all the Users' expressions
 	var (
 		rp1 ExprResp
 		rp2 ExprResp
@@ -380,7 +379,7 @@ func TestWithTwoUsers1(t *testing.T) {
 		t.Fatal("Incorrect expression")
 	}
 
-//// Posting all the Users' expressions
+	//// Posting all the Users' expressions
 	var (
 		rps1 SlExprsResp
 		rps2 SlExprsResp

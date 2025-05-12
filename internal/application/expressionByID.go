@@ -37,7 +37,7 @@ func (o *Orchestrator) ExpressionByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expr, ok := exprStore[request.ID]
+	expr, ok := o.ExprStore[request.ID]
 
 	if !ok || request.JWT != expr.Jwt {
 		http.Error(w, `{"error":"Expression not found"}`, http.StatusNotFound)

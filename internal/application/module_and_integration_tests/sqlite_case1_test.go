@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"context"
+
 	//"log"
 	"database/sql"
 	"encoding/json"
@@ -30,7 +31,7 @@ type JSONWebToken struct {
 
 // CASE 1
 func TestDBC1(t *testing.T) {
-//// Deleting the db tables for a new test
+	//// Deleting the db tables for a new test
 	ctx := context.TODO()
 
 	db, err := sql.Open("sqlite3", "teststore.db")
@@ -52,7 +53,7 @@ func TestDBC1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-//// SignUp
+	//// SignUp
 	handler := http.HandlerFunc(app.SignUp)
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -85,11 +86,11 @@ func TestDBC1(t *testing.T) {
 		t.Fatalf("Expected status 201 , but got %d", res.StatusCode)
 	}
 
-//// SignIn
+	//// SignIn
 	var (
-			rs Resp
-			j JSONWebToken
-		)
+		rs Resp
+		j  JSONWebToken
+	)
 
 	handl := http.HandlerFunc(app.SignIn)
 	serv := httptest.NewServer(handl)
@@ -100,7 +101,7 @@ func TestDBC1(t *testing.T) {
 		t.Fatal("Creating a request error")
 		return
 	}
-	
+
 	res, err = serv.Client().Do(req)
 	if err != nil {
 		t.Fatal("Request processing error:", err)
@@ -109,7 +110,7 @@ func TestDBC1(t *testing.T) {
 	defer res.Body.Close()
 
 	json.NewDecoder(res.Body).Decode(&rs)
-	
+
 	qj := `SELECT jwt FROM users WHERE login = ?`
 	db.QueryRowContext(ctx, qj, reqs.Login).Scan(&j.Jwt)
 

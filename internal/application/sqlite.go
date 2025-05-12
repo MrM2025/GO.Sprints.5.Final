@@ -59,11 +59,11 @@ func (o *Orchestrator) CreateTables() error {
 	);`
 	)
 
-	if _, err := o.Db.ExecContext(o.ctx, usersTable); err != nil {
+	if _, err := o.Db.ExecContext(o.Ctx, usersTable); err != nil {
 		return err
 	}
 
-	if _, err := o.Db.ExecContext(o.ctx, expressionsTable); err != nil {
+	if _, err := o.Db.ExecContext(o.Ctx, expressionsTable); err != nil {
 		return err
 	}
 
@@ -115,19 +115,24 @@ func (o *Orchestrator) AddUser(ctx context.Context, lg, hashed string, db *sql.D
 }
 
 func (o *Orchestrator) AddExpr(expr *Expression, rok bool, db *sql.DB) error {
+	var ID int
 	id, err := strconv.Atoi(expr.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	up := `UPDATE expressions SET expression = $1, jwt = $2, user_lg = $3, status = $4 WHERE id = $5`
+	sl := `SELECT id FROM users WHERE login = ?`
+
+	o.Db.QueryRowContext(o.Ctx, sl, expr.Login).Scan(&ID)
+
+	up := `UPDATE expressions SET expression = $1, jwt = $2, user_lg = $3, status = $4, user_id = $5 WHERE id = $6`
 
 	if !rok {
-		q := `INSERT INTO expressions(id, expression, jwt, user_lg, status) VALUES(?, ?, ?, ?, ?)`
-		_, err := o.Db.ExecContext(o.ctx, q, id, expr.Expr, expr.Jwt, expr.Login, expr.Status)
+		q := `INSERT INTO expressions(id, expression, jwt, user_lg, status, user_id) VALUES(?, ?, ?, ?, ?, ?)`
+		_, err := o.Db.ExecContext(o.Ctx, q, id, expr.Expr, expr.Jwt, expr.Login, expr.Status, ID)
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE constraint failed: expressions.id") {
-				_, err := o.Db.ExecContext(o.ctx, up, expr.Expr, expr.Jwt, expr.Login, expr.Status, expr.ID)
+				_, err := o.Db.ExecContext(o.Ctx, up, expr.Expr, expr.Jwt, expr.Login, expr.Status, ID, expr.ID)
 				return err
 			}
 			return err
@@ -137,7 +142,7 @@ func (o *Orchestrator) AddExpr(expr *Expression, rok bool, db *sql.DB) error {
 	}
 
 	up = `UPDATE expressions SET status = $1, result = $2 WHERE id = $3 AND user_lg = $4`
-	_, err = o.Db.ExecContext(o.ctx, up, expr.Status, expr.Result, id, expr.Login)
+	_, err = o.Db.ExecContext(o.Ctx, up, expr.Status, expr.Result, id, expr.Login)
 	if err != nil {
 		return err
 	}
@@ -149,10 +154,8 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var (
-		u     User
-		h     Hash
-		expr  *Expression = &Expression{}
-		idnum int
+		u User
+		h Hash
 	)
 
 	err := json.NewDecoder(r.Body).Decode(&u)
@@ -165,7 +168,7 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 	up := `UPDATE users SET jwt= $1 WHERE login = $2`
 
 	// TODO: если нет логина, сказать, что он неправильный
-	err = o.Db.QueryRowContext(o.ctx, q, u.Login).Scan(&h.hash)
+	err = o.Db.QueryRowContext(o.Ctx, q, u.Login).Scan(&h.hash)
 	if err != nil {
 		if strings.Contains(err.Error(), "no rows in result set") {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -181,61 +184,15 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = o.Db.QueryRowContext(
-		o.ctx,
-		`SELECT COUNT(id) FROM expressions`,
-	).Scan(&idnum)
-
-	for id := range idnum {
-		rows, err := o.Db.QueryContext(
-			o.ctx,
-			`SELECT expression, jwt, user_lg, status, result FROM expressions WHERE id = ?`,
-			id,
-		)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer rows.Close()
-
-		if !rows.Next() {
-			// Проверяем, не было ли ошибок при получении данных
-			if err := rows.Err(); err != nil {
-				log.Fatalf("ошибка при чтении строк: %w", err)
-			}
-			break // Данных нет, но ошибок тоже нет
-		}
-
-		if err = rows.Scan(
-			&expr.Expr,
-			&expr.Jwt,
-			&expr.Login,
-			&expr.Status,
-			&expr.Result,
-		); err != nil {
-			log.Fatal(err)
-		}
-
-		expr.ID = strconv.Itoa(id)
-		exprStore[expr.ID] = expr
-
-		if expr.Status != "completed" {
-			o.Tasks(expr)
-		}
-
-	}
-
-	o.exprCounter = idnum
-
 	jwt := AddJWT(u.Login)
 
-	for _, expr := range exprStore {
+	for _, expr := range o.ExprStore {
 		if expr.Login == u.Login {
 			expr.Jwt = jwt
 		}
 	}
 
-	_, err = o.Db.ExecContext(o.ctx, up, jwt, u.Login)
+	_, err = o.Db.ExecContext(o.Ctx, up, jwt, u.Login)
 	if err != nil {
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(Rsp{Status: err.Error()})
@@ -264,7 +221,7 @@ func (o *Orchestrator) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := o.AddUser(o.ctx, u.Login, h, o.Db); err != nil {
+	if err := o.AddUser(o.Ctx, u.Login, h, o.Db); err != nil {
 		var status int
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -288,7 +245,7 @@ func (o *Orchestrator) SignUp(w http.ResponseWriter, r *http.Request) {
 func (o *Orchestrator) DTBs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	_, err := o.Db.ExecContext(o.ctx, `DELETE FROM users`)
+	_, err := o.Db.ExecContext(o.Ctx, `DELETE FROM users`)
 	if err != nil {
 		http.Error(w, "deleting all tables error", http.StatusConflict)
 		return
