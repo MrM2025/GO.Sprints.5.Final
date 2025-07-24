@@ -101,7 +101,7 @@ type Expression struct {
 	Jwt    string   `json:"-"`
 	Login  string   `json:"login,omitempty"`
 	Status string   `json:"status,omitempty"`
-	Result float64  `json:"result,omitempty"`
+	Result string   `json:"result,omitempty"`
 	AST    *ASTNode `json:"-"`
 }
 
@@ -165,8 +165,6 @@ func (o *Orchestrator) Tasks(expr *Expression) {
 	traverse(expr.AST)
 }
 
-var divbyzeroeerr error
-
 func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Сервер, который принимает арифметическое выражение, переводит его в набор последовательных задач и обеспечивает порядок их выполнения.
 	var (
 		emsg string
@@ -212,7 +210,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 
 	ok, err := calc.IsCorrectExpression(request.Expression) // Проверяем выражение на наличие ошибок
 
-	if !ok && err != nil || divbyzeroeerr != nil { // Присваиваем ошибке статус-код, выводим их
+	if !ok && err != nil { // Присваиваем ошибкам статус-код, выводим их
 		switch {
 		case errors.Is(err, errorStore.EmptyExpressionErr):
 			emsg = errorStore.EmptyExpressionErr.Error()
@@ -229,9 +227,8 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		case errors.Is(err, errorStore.NthToPopErr): // no operator to pop
 			emsg = errorStore.NthToPopErr.Error()
 
-		case errors.Is(divbyzeroeerr, errorStore.DvsByZeroErr):
+		case errors.Is(err, errorStore.DvsByZeroErr):
 			emsg = errorStore.DvsByZeroErr.Error()
-			divbyzeroeerr = nil
 		}
 
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -310,7 +307,7 @@ func (o *Orchestrator) Post(ctx context.Context, in *pb.PostRequest) (*pb.Empty,
 		o.Tasks(expr)
 		if expr.AST.IsLeaf {
 			expr.Status = "completed"
-			expr.Result = expr.AST.Value
+			expr.Result = strconv.FormatFloat(expr.AST.Value, 'g', 8, 32)
 		}
 
 		err := o.AddExpr(expr, true, o.Db)

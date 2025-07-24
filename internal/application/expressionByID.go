@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"strconv"
 	"sync"
-	//"strconv"
 )
 
 type ExprResp struct {
@@ -46,7 +46,7 @@ func (o *Orchestrator) ExpressionByID(w http.ResponseWriter, r *http.Request) {
 
 	if expr.AST != nil && expr.AST.IsLeaf {
 		expr.Status = "completed"
-		expr.Result = math.Round(expr.AST.Value*100) / 100
+		expr.Result = strconv.FormatFloat(math.Round(expr.AST.Value*100)/100, 'g', 8, 32)
 	}
 
 	w.WriteHeader(http.StatusOK)

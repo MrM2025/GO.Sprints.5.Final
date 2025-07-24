@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -66,12 +65,7 @@ func (a *Agent) worker() {
 
 		log.Printf("Worker: received task %s: %f %s %f, simulating %d ms", task.Id, task.Arg1, task.Operation, task.Arg2, task.OperationTime)
 		time.Sleep(time.Duration(task.OperationTime) * time.Millisecond)
-		divbyzeroeerr = nil
-		result, diverr := calculator(task.Operation, task.Arg1, task.Arg2)
-
-		if errors.Is(diverr, errorStore.DvsByZeroErr) {
-			divbyzeroeerr = errorStore.DvsByZeroErr
-		}
+		result, _ := calculator(task.Operation, task.Arg1, task.Arg2)
 
 		_, err = a.grpcClient.Post(context.Background(), &pb.PostRequest{Id: task.Id, Result: result})
 		if err != nil {

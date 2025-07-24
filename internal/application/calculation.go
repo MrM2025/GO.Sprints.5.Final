@@ -3,6 +3,7 @@ package application
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
@@ -563,6 +564,8 @@ func (s *TCalc) IsCorrectExpression(Expression string) (bool, error) { //Про�
 		errorStore.IncorrectExpressionErr = fmt.Errorf(`incorrect expression`)
 	}
 
+	Expression = strings.ReplaceAll(Expression, " ", "")
+
 	correctexpression := true
 	expressionlength := len(Expression)
 	countleftparenthesis := 0
@@ -575,34 +578,37 @@ func (s *TCalc) IsCorrectExpression(Expression string) (bool, error) { //Про�
 				errorstring += fmt.Sprintf("| incorrect symbol, char %d. Allowed only: %s ", index, "1234567890.*/+-()")
 			case index == 0 && !d.IsNumber(Expression[index]) && d.IsParenthesis(Expression[index]) == 0 && d.IsOperator(Expression[index]) != isSubtraction: //Запрещенная последовательность "выражение начинается не числом и не скобкой"
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "non-number character": char %d `, index)
+				errorstring += fmt.Sprintf("| wrong sequence `non-number character`: char %d ", index)
 			case d.IsOperator(Expression[index]) != 0 && d.IsOperator(Expression[index+1]) != 0: //Запрещенная последовательность "оператор->оператор"
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "operation sign->operation sign": chars %d, %d `, index, index+1)
+				errorstring += fmt.Sprintf("| wrong sequence `operation sign->operation sign`: chars %d, %d ", index, index+1)
 			case d.IsSeparator(Expression[index]) != 0 && d.IsSeparator(Expression[index+1]) != 0: //Запрещенная последовательность "разделитель->разделитель"
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "multiple separators together": starting from char %d `, index)
+				errorstring += fmt.Sprintf("| wrong sequence `multiple separators together`: starting from char %d ", index)
 			case d.IsParenthesis(Expression[index]) != 0 && d.IsSeparator(Expression[index+1]) != 0: //Запрещенная последовательность "скобка->разделитель дроби"
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "parenthesis->separator": chars %d, %d `, index, index+1)
+				errorstring += fmt.Sprintf("| wrong sequence `parenthesis->separator`: chars %d, %d ", index, index+1)
 			case d.IsParenthesis(Expression[index+1]) != 0 && d.IsSeparator(Expression[index]) != 0: //Запрещенная последовательность "разделитель дроби->скобка"
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "separator->parenthesis": chars %d, %d `, index, index+1)
+				errorstring += fmt.Sprintf("| wrong sequence `separator->parenthesis`: chars %d, %d ", index, index+1)
 			case d.IsSeparator(Expression[index]) != 0 && d.IsOperator(Expression[index+1]) != 0: //Запрещенная последовательность "разделитель дроби->оператор
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "separator->operation sign": chars %d, %d `, index, index+1)
+				errorstring += fmt.Sprintf("| wrong sequence `separator->operation sign`: chars %d, %d ", index, index+1)
 			case d.IsSeparator(Expression[index+1]) != 0 && d.IsOperator(Expression[index]) != 0: //Запрещенная последовательность "оператор->разделитель дроби"
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "operation sign->separator": chars %d, %d `, index, index+1)
+				errorstring += fmt.Sprintf("| wrong sequence `operation sign->separator`: chars %d, %d ", index, index+1)
 			case d.IsParenthesis(Expression[index]) == isRightParenthesis && d.IsOperator(Expression[index+1]) == 0 && d.IsParenthesis(Expression[index+1]) != isRightParenthesis:
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "right parenthesys -> non operation sign or non right parenthesys character": chars %d, %d `, index, index+1)
+				errorstring += fmt.Sprintf("| wrong sequence `right parenthesys -> non operation sign or non right parenthesys character`: chars %d, %d ", index, index+1)
+			case Expression[index] == '/' && Expression[index+1] == '0': // Запрещенная последовательность "Деление на ноль"
+				correctexpression = false
+				errorstring += fmt.Sprintf("| wrong sequence `division by zero`")
 			case d.IsSeparator(Expression[index]) != 0 && d.IsNumber(Expression[index+1]) && d.IsNumber(Expression[index-1]): //Запрещенная последовательность "множественные разделители дроби в числе"
 				for nextcharindex := index + 1; nextcharindex < expressionlength; nextcharindex++ {
 					if !d.IsNumber(Expression[nextcharindex]) {
 						if d.IsSeparator(Expression[nextcharindex]) != 0 {
 							correctexpression = false
-							errorstring += fmt.Sprintf(`| wrong sequence "multiple separators within number": starting from char %d `, index)
+							errorstring += fmt.Sprintf("| wrong sequence `multiple separators within number`: starting from char %d ", index)
 							break
 						} else {
 							break
@@ -611,11 +617,11 @@ func (s *TCalc) IsCorrectExpression(Expression string) (bool, error) { //Про�
 				}
 			case d.IsParenthesis(Expression[index]) == isLeftParenthesis && d.IsParenthesis(Expression[index+1]) == isRightParenthesis: //Запрещенная последовательность "пустые скобки"
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "empty parentheses": chars %d, %d `, index, index+1)
+				errorstring += fmt.Sprintf("| wrong sequence `empty parentheses`: chars %d, %d ", index, index+1)
 			case d.IsParenthesis(Expression[index]) == isRightParenthesis && countleftparenthesis == 0: // Запрещенная последовательность "подвыражение начинается с правой скобки"
 				countrightparenthesis++
 				correctexpression = false
-				errorstring += fmt.Sprintf(`| wrong sequence "beginning form right parenthesis": on char %d `, index)
+				errorstring += fmt.Sprintf("| wrong sequence `beginning form right parenthesis`: on char %d ", index)
 			case d.IsParenthesis(Expression[index]) == isLeftParenthesis && countleftparenthesis == 0: // Считаем левые и правые скобки
 				countleftparenthesis++
 				for nextcharindex := index + 1; nextcharindex < expressionlength; nextcharindex++ {
@@ -632,19 +638,19 @@ func (s *TCalc) IsCorrectExpression(Expression string) (bool, error) { //Про�
 			errorstring += fmt.Sprintf("| incorrect symbol, char %d. Allowed only: %s", index, "1234567890.*/+-()")
 		} else if !d.IsNumber(Expression[index]) && d.IsParenthesis(Expression[index]) != isRightParenthesis && index == expressionlength-1 {
 			correctexpression = false
-			errorstring += `| wrong sequence "non-numeric last character"`
+			errorstring += "| wrong sequence `non-numeric last character`"
 		} else if !d.IsNumber(Expression[index]) && d.IsParenthesis(Expression[index]) == isRightParenthesis && index == expressionlength-1 && countleftparenthesis != countrightparenthesis {
 			correctexpression = false
-			errorstring += `| wrong sequence "non-numeric last character"`
+			errorstring += "| wrong sequence `non-numeric last character`"
 		}
 	}
 
 	if countleftparenthesis < countrightparenthesis { // Не хватает левых скобок
 		correctexpression = false
-		errorstring += `| wrong sequence "insufficient number of left parentheses"`
+		errorstring += "| wrong sequence `insufficient number of left parentheses`"
 	} else if countleftparenthesis > countrightparenthesis { // Не хватает правых скобок
 		correctexpression = false
-		errorstring += `| wrong sequence "insufficient number of right parentheses"`
+		errorstring += "| wrong sequence `insufficient number of right parentheses`"
 	}
 
 	if !correctexpression { //Некорректное выражение

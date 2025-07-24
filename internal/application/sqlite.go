@@ -7,12 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
-
-	//"os"
-	//"log"
-	"net/http"
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
@@ -167,7 +164,6 @@ func (o *Orchestrator) SignIn(w http.ResponseWriter, r *http.Request) {
 	q := `SELECT hash FROM users WHERE login = ?`
 	up := `UPDATE users SET jwt= $1 WHERE login = $2`
 
-	// TODO: если нет логина, сказать, что он неправильный
 	err = o.Db.QueryRowContext(o.Ctx, q, u.Login).Scan(&h.hash)
 	if err != nil {
 		if strings.Contains(err.Error(), "no rows in result set") {

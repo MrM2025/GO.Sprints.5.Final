@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"strconv"
 	"sync"
 )
 
@@ -19,7 +20,6 @@ var EmptyExpression = &Expression{
 	Status: "",
 }
 
-// TODO: если нет ни одного expression, то выводить сообщение об их отсутствии
 func (o *Orchestrator) ExpressionsOutput(w http.ResponseWriter, r *http.Request) { //Сервер, который выводит все переданные серверу выражения
 	var (
 		mu sync.Mutex
@@ -52,7 +52,7 @@ func (o *Orchestrator) ExpressionsOutput(w http.ResponseWriter, r *http.Request)
 
 		if expr.AST != nil && expr.AST.IsLeaf {
 			expr.Status = "completed"
-			expr.Result = math.Round(expr.AST.Value*100) / 100
+			expr.Result = strconv.FormatFloat(math.Round(expr.AST.Value*100)/100, 'g', 8, 32)
 		}
 		exprs = append(exprs, expr)
 	}
